@@ -1,0 +1,8 @@
+aiohttp
+ccxt
+matplotlib
+numpy
+pandas
+python-dotenv
+requests
+ruff

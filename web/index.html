@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bitcoin Liquidation Pulse</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js"></script>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <section>
+          <p class="eyebrow">BTCUSDT</p>
+          <h1>Bitcoin Liquidation Pulse</h1>
+          <p class="subtitle" id="coverage">等待数据</p>
+        </section>
+        <section class="actions">
+          <div class="status-pill" id="streamStatus">连接中</div>
+          <button class="refresh-button" id="refreshButton" type="button" aria-label="刷新数据">
+            <span class="refresh-icon">↻</span>
+            <span>刷新</span>
+          </button>
+        </section>
+      </header>
+
+      <section class="kpi-grid" aria-label="关键指标">
+        <article class="kpi-card tone-red">
+          <span class="kpi-label">多头爆仓</span>
+          <strong id="longUsd">$0</strong>
+          <small id="longCount">0 笔</small>
+        </article>
+        <article class="kpi-card tone-green">
+          <span class="kpi-label">空头爆仓</span>
+          <strong id="shortUsd">$0</strong>
+          <small id="shortCount">0 笔</small>
+        </article>
+        <article class="kpi-card tone-blue">
+          <span class="kpi-label">净偏向</span>
+          <strong id="netBias">Neutral</strong>
+          <small id="netUsd">$0</small>
+        </article>
+        <article class="kpi-card tone-gold">
+          <span class="kpi-label">链上费率</span>
+          <strong id="fastestFee">0 sat/vB</strong>
+          <small id="feePressure">quiet</small>
+        </article>
+      </section>
+
+      <section class="dashboard-grid">
+        <article class="panel span-2">
+          <div class="panel-heading">
+            <h2>24h 多空爆仓</h2>
+            <span id="totalLiquidation">$0</span>
+          </div>
+          <div class="chart-box large">
+            <canvas id="liquidationChart"></canvas>
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-heading">
+            <h2>多空占比</h2>
+            <span id="splitLabel">0 / 0</span>
+          </div>
+          <div class="chart-box">
+            <canvas id="splitChart"></canvas>
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-heading">
+            <h2>费率阶梯</h2>
+            <span id="feeLabel">mempool</span>
+          </div>
+          <div class="chart-box">
+            <canvas id="feeChart"></canvas>
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-heading">
+            <h2>Mempool 区块</h2>
+            <span id="blockLabel">0 blocks</span>
+          </div>
+          <div class="chart-box">
+            <canvas id="blockChart"></canvas>
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-heading">
+            <h2>链上大额异动</h2>
+            <span id="largeTxLabel">0 tx</span>
+          </div>
+          <div class="tx-list" id="largeTxList"></div>
+        </article>
+      </section>
+
+      <footer class="source-line">
+        <span id="updatedAt">--</span>
+        <span>CMC 24h liquidation snapshot</span>
+        <span>Binance forceOrder live stream</span>
+        <span>mempool.space</span>
+      </footer>
+    </main>
+    <script src="/app.js"></script>
+  </body>
+</html>
