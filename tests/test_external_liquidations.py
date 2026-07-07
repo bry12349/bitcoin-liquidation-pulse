@@ -1,8 +1,16 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 
-from liquidation_pulse.external_liquidations import build_cmc_btc_snapshot, merge_liquidation_snapshots
+import requests
+
+from liquidation_pulse.external_liquidations import (
+    CoinMarketCapLiquidationClient,
+    build_cmc_btc_snapshot,
+    build_liquidation_view,
+    merge_liquidation_snapshots,
+)
 
 
 class ExternalLiquidationsTest(unittest.TestCase):
@@ -50,6 +58,66 @@ class ExternalLiquidationsTest(unittest.TestCase):
         self.assertEqual(merged["net_bias"], "shorts squeezed")
         self.assertEqual(merged["hourly"][-1]["label"], "24h")
         self.assertEqual(merged["coverage"]["label"], "CMC 24h snapshot + Binance live")
+
+    def test_liquidation_view_prefers_external_without_double_counting(self) -> None:
+        live = {
+            "coverage": {"label": "collected 12 min", "minutes": 12},
+            "long": {"usd": 100.0, "count": 2},
+            "short": {"usd": 50.0, "count": 1},
+            "total_usd": 150.0,
+            "net_usd": -50.0,
+            "net_bias": "longs flushed",
+            "hourly": [{"label": "12:00", "long_usd": 100.0, "short_usd": 50.0, "count": 3}],
+            "recent": [],
+        }
+        external = {
+            "source": "CoinMarketCap 24h liquidation table",
+            "updated_at_ms": 1_700_000_000_000,
+            "long_usd": 1_000.0,
+            "short_usd": 2_000.0,
+            "total_usd": 3_000.0,
+            "open_interest_usd": 10_000.0,
+        }
+
+        view = build_liquidation_view(live, external, now_ms=1_700_000_060_000)
+
+        self.assertEqual(view["basis"], "external_24h")
+        self.assertEqual(view["long"]["usd"], 1_000.0)
+        self.assertEqual(view["short"]["usd"], 2_000.0)
+        self.assertEqual(view["total_usd"], 3_000.0)
+        self.assertEqual(view["live_collected"]["total_usd"], 150.0)
+        self.assertEqual(view["combined_experimental"]["total_usd"], 3_150.0)
+        self.assertTrue(view["combined_experimental"]["overlap_risk"])
+
+    def test_liquidation_view_falls_back_to_live_when_external_missing(self) -> None:
+        live = {
+            "coverage": {"label": "collected 12 min", "minutes": 12},
+            "long": {"usd": 100.0, "count": 2},
+            "short": {"usd": 50.0, "count": 1},
+            "total_usd": 150.0,
+            "net_usd": -50.0,
+            "net_bias": "longs flushed",
+            "hourly": [],
+            "recent": [],
+        }
+
+        view = build_liquidation_view(live, None, now_ms=1_700_000_060_000)
+
+        self.assertEqual(view["basis"], "live_collected")
+        self.assertEqual(view["long"]["usd"], 100.0)
+        self.assertEqual(view["total_usd"], 150.0)
+        self.assertIsNone(view["external_24h"])
+        self.assertIsNone(view["combined_experimental"])
+
+    def test_cmc_client_records_request_failures(self) -> None:
+        client = CoinMarketCapLiquidationClient(proxy_url=None)
+
+        with patch("liquidation_pulse.external_liquidations.requests.get") as get:
+            get.side_effect = requests.RequestException("network down")
+            snapshot = client.btc_24h_snapshot()
+
+        self.assertIsNone(snapshot)
+        self.assertIn("network down", client.last_error or "")
 
 
 if __name__ == "__main__":

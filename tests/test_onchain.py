@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 
-from liquidation_pulse.onchain import build_onchain_snapshot
+import requests
+
+from liquidation_pulse.onchain import MempoolClient, build_onchain_snapshot
 
 
 class OnchainSnapshotTest(unittest.TestCase):
@@ -32,6 +35,17 @@ class OnchainSnapshotTest(unittest.TestCase):
         self.assertEqual(snapshot["fee_pressure"], "quiet")
         self.assertEqual(snapshot["large_transactions"], [])
         self.assertEqual(snapshot["mempool_blocks"], [])
+
+    def test_client_records_endpoint_failures(self) -> None:
+        client = MempoolClient(proxy_url=None)
+
+        with patch("liquidation_pulse.onchain.requests.get") as get:
+            get.side_effect = requests.RequestException("timeout")
+            snapshot = client.snapshot()
+
+        self.assertEqual(snapshot["fees"]["fastest"], 0)
+        self.assertIn("/v1/fees/recommended", client.last_errors)
+        self.assertIn("timeout", client.last_errors["/v1/fees/recommended"])
 
 
 if __name__ == "__main__":

@@ -34,6 +34,11 @@ function setText(id, value) {
   document.getElementById(id).textContent = value;
 }
 
+function setStatus(id, value) {
+  const element = document.getElementById(id);
+  element.dataset.status = value || "waiting";
+}
+
 function makeGradient(ctx, color) {
   const gradient = ctx.createLinearGradient(0, 0, 0, 320);
   gradient.addColorStop(0, `${color}aa`);
@@ -183,6 +188,10 @@ function render(data) {
   const collector = data.collector || {};
   const long = liquidations.long || {};
   const short = liquidations.short || {};
+  const live = liquidations.live_collected || {};
+  const external = liquidations.external_24h;
+  const combined = liquidations.combined_experimental;
+  const history = data.history || {};
 
   setText("streamStatus", statusLabel(collector.state));
   setText("coverage", `${liquidations.coverage?.label || "waiting"} · ${collector.message || ""}`);
@@ -200,9 +209,31 @@ function render(data) {
   setText("blockLabel", `${(onchain.mempool_blocks || []).length} blocks`);
   setText("largeTxLabel", `${(onchain.large_transactions || []).length} tx`);
   setText("updatedAt", `更新 ${formatTime(data.generated_at_ms)}`);
+  setText("basisLabel", liquidations.basis_label || liquidations.basis || "waiting");
+  setText("externalTotal", external ? formatUsd(external.total_usd) : "--");
+  setText("liveTotal", formatUsd(live.total_usd || 0));
+  setText("experimentalTotal", combined ? formatUsd(combined.total_usd) : "--");
+  setText("historyLabel", `${history.count || 0} points`);
+  setText("sourceNote", liquidations.source_note || "等待数据源");
+  renderSourceHealth(data.health || {}, liquidations.basis);
 
   updateCharts(liquidations, onchain);
   renderTransactions(onchain.large_transactions || []);
+}
+
+function renderSourceHealth(health, basis) {
+  const cmc = health.cmc || {};
+  const binance = health.binance || {};
+  const mempool = health.mempool || {};
+
+  setText("cmcStatus", healthLabel(cmc.status));
+  setText("binanceStatus", healthLabel(binance.status || binance.state));
+  setText("mempoolStatus", healthLabel(mempool.status));
+
+  setStatus("basisStatus", basis === "external_24h" ? cmc.status || "waiting" : binance.status || "waiting");
+  setStatus("cmcHealth", cmc.status || "waiting");
+  setStatus("binanceHealth", binance.status || "waiting");
+  setStatus("mempoolHealth", mempool.status || "waiting");
 }
 
 function updateCharts(liquidations, onchain) {
@@ -233,21 +264,33 @@ function updateCharts(liquidations, onchain) {
 
 function renderTransactions(items) {
   const list = document.getElementById("largeTxList");
+  list.replaceChildren();
   if (!items.length) {
-    list.innerHTML = '<div class="empty">暂无大额异动</div>';
+    const empty = document.createElement("div");
+    empty.className = "empty";
+    empty.textContent = "暂无大额异动";
+    list.appendChild(empty);
     return;
   }
-  list.innerHTML = items
-    .map(
-      (item) => `
-        <div class="tx-item">
-          <div class="tx-hash">${item.txid}</div>
-          <div class="tx-btc">${item.btc} BTC</div>
-          <div class="tx-meta">fee ${number.format(item.fee_sat)} sats · ${item.vsize} vB</div>
-        </div>
-      `,
-    )
-    .join("");
+  for (const item of items) {
+    const row = document.createElement("div");
+    row.className = "tx-item";
+
+    const hash = document.createElement("div");
+    hash.className = "tx-hash";
+    hash.textContent = item.txid;
+
+    const btc = document.createElement("div");
+    btc.className = "tx-btc";
+    btc.textContent = `${item.btc} BTC`;
+
+    const meta = document.createElement("div");
+    meta.className = "tx-meta";
+    meta.textContent = `fee ${number.format(item.fee_sat)} sats · ${item.vsize} vB`;
+
+    row.append(hash, btc, meta);
+    list.appendChild(row);
+  }
 }
 
 function statusLabel(state) {
@@ -268,6 +311,21 @@ function biasLabel(value) {
     neutral: "中性",
   };
   return labels[value] || value || "中性";
+}
+
+function healthLabel(value) {
+  const labels = {
+    ok: "正常",
+    partial: "部分",
+    stale: "过期",
+    error: "异常",
+    waiting: "等待",
+    connected: "正常",
+    connecting: "连接中",
+    reconnecting: "重连",
+    idle: "待启动",
+  };
+  return labels[value] || value || "等待";
 }
 
 document.getElementById("refreshButton").addEventListener("click", () => fetchSnapshot(true));

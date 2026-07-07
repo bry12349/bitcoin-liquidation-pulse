@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+import time
 
 import requests
 
@@ -36,11 +37,18 @@ class MempoolClient:
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self.proxy_url = proxy_url if proxy_url is not None else detect_proxy_url()
+        self.last_attempt_ms: int | None = None
+        self.last_success_ms: int | None = None
+        self.last_errors: dict[str, str] = {}
 
     def snapshot(self) -> dict[str, Any]:
+        self.last_attempt_ms = int(time.time() * 1000)
+        self.last_errors = {}
         fees = self._get_json("/v1/fees/recommended", {})
         recent = self._get_json("/mempool/recent", [])
         blocks = self._get_json("/v1/fees/mempool-blocks", [])
+        if not self.last_errors:
+            self.last_success_ms = int(time.time() * 1000)
         return build_onchain_snapshot(fees=fees, recent=recent, mempool_blocks=blocks)
 
     def _get_json(self, path: str, fallback: Any) -> Any:
@@ -52,7 +60,8 @@ class MempoolClient:
             )
             response.raise_for_status()
             return response.json()
-        except requests.RequestException:
+        except (requests.RequestException, ValueError) as exc:
+            self.last_errors[path] = str(exc)
             return fallback
 
 

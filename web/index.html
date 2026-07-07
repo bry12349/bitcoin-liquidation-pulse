@@ -47,6 +47,25 @@
         </article>
       </section>
 
+      <section class="source-health" aria-label="数据源状态">
+        <div class="health-pill" id="basisStatus" data-status="waiting">
+          <span>基准</span>
+          <strong id="basisLabel">等待</strong>
+        </div>
+        <div class="health-pill" id="cmcHealth" data-status="waiting">
+          <span>CMC</span>
+          <strong id="cmcStatus">waiting</strong>
+        </div>
+        <div class="health-pill" id="binanceHealth" data-status="waiting">
+          <span>Binance</span>
+          <strong id="binanceStatus">waiting</strong>
+        </div>
+        <div class="health-pill" id="mempoolHealth" data-status="waiting">
+          <span>mempool</span>
+          <strong id="mempoolStatus">waiting</strong>
+        </div>
+      </section>
+
       <section class="dashboard-grid">
         <article class="panel span-2">
           <div class="panel-heading">
@@ -94,6 +113,28 @@
             <span id="largeTxLabel">0 tx</span>
           </div>
           <div class="tx-list" id="largeTxList"></div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-heading">
+            <h2>来源拆分</h2>
+            <span id="historyLabel">0 points</span>
+          </div>
+          <div class="source-breakdown">
+            <div>
+              <span>CMC 24h</span>
+              <strong id="externalTotal">$0</strong>
+            </div>
+            <div>
+              <span>Binance live</span>
+              <strong id="liveTotal">$0</strong>
+            </div>
+            <div>
+              <span>实验合并</span>
+              <strong id="experimentalTotal">--</strong>
+            </div>
+          </div>
+          <p class="source-note" id="sourceNote">等待数据源</p>
         </article>
       </section>
 

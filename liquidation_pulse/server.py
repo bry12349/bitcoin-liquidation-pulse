@@ -10,7 +10,8 @@ from typing import Any
 from urllib.parse import urlparse
 
 from liquidation_pulse.binance_ws import BinanceForceOrderCollector
-from liquidation_pulse.external_liquidations import CoinMarketCapLiquidationClient, merge_liquidation_snapshots
+from liquidation_pulse.external_liquidations import CoinMarketCapLiquidationClient, build_liquidation_view
+from liquidation_pulse.history import SnapshotHistory
 from liquidation_pulse.liquidations import LiquidationStore
 from liquidation_pulse.onchain import MempoolClient
 from liquidation_pulse.proxy import detect_proxy_url
@@ -27,6 +28,7 @@ class DashboardState:
         self.onchain = MempoolClient(proxy_url=self.proxy_url)
         self.external_liquidations = CoinMarketCapLiquidationClient(proxy_url=self.proxy_url)
         self.collector = BinanceForceOrderCollector(self.liquidations, proxy_url=self.proxy_url)
+        self.history = SnapshotHistory(DATA_DIR / "snapshots.jsonl")
         self._cached_onchain: dict[str, Any] = {}
         self._onchain_updated_ms = 0
         self._cached_external_liquidations: dict[str, Any] | None = None
@@ -45,21 +47,85 @@ class DashboardState:
             if external:
                 self._cached_external_liquidations = external
                 self._external_liquidations_updated_ms = now_ms
-        liquidations = merge_liquidation_snapshots(
+        liquidations = build_liquidation_view(
             self.liquidations.snapshot(now_ms=now_ms),
             self._cached_external_liquidations,
+            now_ms=now_ms,
         )
-        return {
+        payload = {
             "generated_at_ms": now_ms,
             "symbol": "BTCUSDT",
             "liquidations": liquidations,
             "onchain": self._cached_onchain,
             "collector": self.collector.status,
+            "health": self._source_health(now_ms),
             "sources": {
-                "liquidations": "CoinMarketCap 24h liquidation table + Binance USD-M Futures BTCUSDT forceOrder WebSocket",
+                "liquidations": "CoinMarketCap 24h liquidation table; Binance USD-M Futures BTCUSDT forceOrder WebSocket tracked separately",
                 "onchain": "mempool.space public API",
             },
             "proxy": self.proxy_url,
+        }
+        self.history.record(payload, now_ms=now_ms)
+        payload["history"] = self.history.summary()
+        return payload
+
+    def _source_health(self, now_ms: int) -> dict[str, Any]:
+        return {
+            "cmc": self._cmc_health(now_ms),
+            "mempool": self._mempool_health(),
+            "binance": self._binance_health(),
+        }
+
+    def _cmc_health(self, now_ms: int) -> dict[str, Any]:
+        last_success_ms = self.external_liquidations.last_success_ms or self._external_liquidations_updated_ms or None
+        last_attempt_ms = self.external_liquidations.last_attempt_ms or self._external_liquidations_updated_ms or None
+        last_error = self.external_liquidations.last_error
+        if last_success_ms:
+            status = "stale" if now_ms - last_success_ms > 5 * 60_000 else "ok"
+        elif last_error:
+            status = "error"
+        else:
+            status = "waiting"
+        return {
+            "status": status,
+            "last_attempt_ms": last_attempt_ms,
+            "last_success_ms": last_success_ms,
+            "last_error": last_error,
+        }
+
+    def _mempool_health(self) -> dict[str, Any]:
+        errors = dict(self.onchain.last_errors)
+        if errors:
+            status = "partial" if self._cached_onchain else "error"
+            last_success_ms = self.onchain.last_success_ms
+        elif self._cached_onchain:
+            status = "ok"
+            last_success_ms = self.onchain.last_success_ms or self._onchain_updated_ms or None
+        else:
+            status = "waiting"
+            last_success_ms = None
+        return {
+            "status": status,
+            "last_attempt_ms": self.onchain.last_attempt_ms or self._onchain_updated_ms or None,
+            "last_success_ms": last_success_ms,
+            "last_errors": errors,
+        }
+
+    def _binance_health(self) -> dict[str, Any]:
+        status = dict(self.collector.status)
+        state = str(status.get("state") or "idle")
+        if state == "connected":
+            health_status = "ok"
+        elif state in {"connecting", "idle"}:
+            health_status = "waiting"
+        else:
+            health_status = "error"
+        return {
+            "status": health_status,
+            "state": state,
+            "last_event_ms": status.get("last_event_ms"),
+            "last_error": status.get("last_error"),
+            "message": status.get("message"),
         }
 
 

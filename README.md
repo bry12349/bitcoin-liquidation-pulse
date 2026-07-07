@@ -10,8 +10,10 @@ Bitcoin Liquidation Pulse is a local market intelligence dashboard for BTC trade
 
 - No API key required for the default data path.
 - Pulls a 24h BTC liquidation snapshot from CoinMarketCap public pages.
-- Listens to Binance USD-M Futures `BTCUSDT` force-order liquidation events.
+- Listens to Binance USD-M Futures `BTCUSDT` force-order liquidation events and tracks them separately from the 24h snapshot.
 - Tracks Bitcoin fee pressure, mempool blocks, and recent large transactions via mempool.space.
+- Shows source health and data freshness for CoinMarketCap, Binance, and mempool.space.
+- Stores lightweight one-minute dashboard snapshots under `data/` for future trend views.
 - Auto-detects the macOS HTTP proxy, useful when Binance needs a local proxy.
 - Serves a fast local GUI with Chart.js visualizations and smooth transitions.
 - Includes focused unit tests for liquidation aggregation, on-chain normalization, proxy parsing, and HTTP server behavior.
@@ -27,10 +29,12 @@ http://127.0.0.1:8765
 Core widgets include:
 
 - 24h long vs. short liquidation totals.
-- Hourly liquidation histogram.
+- Source-aware liquidation totals that avoid default double counting.
+- Hourly liquidation histogram for locally collected live events, with a CMC fallback before live events arrive.
 - Long/short share chart.
 - Bitcoin fee ladder and mempool block pressure.
 - Recent large on-chain transactions.
+- Data-source health and CMC/Binance split totals.
 
 ## Architecture
 
@@ -40,8 +44,13 @@ flowchart LR
   BINANCE["Binance forceOrder WebSocket"] --> STORE["Local liquidation store"]
   STORE --> API
   MEMPOOL["mempool.space REST API"] --> API
+  API --> HIST["Local one-minute snapshot history"]
   API --> UI["Apple-style local web dashboard"]
 ```
+
+## Data Semantics
+
+The dashboard uses the CoinMarketCap BTC 24h liquidation snapshot as the headline 24h market view when it is available. Binance force-order events are collected locally and shown as a separate live stream. The API exposes an experimental combined value for comparison, but the UI does not use it as the default headline because it may double count activity already included in the CoinMarketCap snapshot.
 
 ## Quick Start
 
